@@ -2,7 +2,7 @@
 // - モデル・トークン数・プロンプトはサーバー側で固定する（クライアントからは入力項目だけ受け取る）
 // - 入力は長さを制限し、IPごとの簡易レート制限をかける
 const MODEL = 'claude-haiku-5-5';
-const MAX_TOKENS = 1000;
+const MAX_TOKENS = 2000;
 
 // 入力項目ごとの最大文字数
 const LIMITS = {
@@ -112,8 +112,15 @@ export default async function handler(req, res) {
       const credit = /credit balance/i.test(String(data?.error?.message || '')) ? '・残高不足' : '';
       return res.status(502).json({ error: `カルテの生成に失敗しました。（${response.status} ${type}${credit}）` });
     }
-    const text = data.content?.[0]?.text;
-    if (!text) return res.status(502).json({ error: 'カルテの生成に失敗しました。' });
+    // 応答には思考ブロックなどが先頭に来ることがあるため、text ブロックだけを集める
+    const blocks = Array.isArray(data.content) ? data.content : [];
+    const text = blocks.filter((b) => b?.type === 'text' && b.text).map((b) => b.text).join('').trim();
+    if (!text) {
+      const types = blocks.map((b) => String(b?.type || '?').replace(/[^a-z_]/g, '')).join(',') || 'なし';
+      const stop = String(data.stop_reason || '?').replace(/[^a-z_]/g, '');
+      console.error('no text block', types, stop);
+      return res.status(502).json({ error: `カルテの生成に失敗しました。（本文なし: ${types} / ${stop}）` });
+    }
     return res.status(200).json({ text });
   } catch (error) {
     console.error('generate failed', error);
