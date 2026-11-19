@@ -107,7 +107,10 @@ export default async function handler(req, res) {
     const data = await response.json();
     if (!response.ok) {
       console.error('Anthropic API error', response.status, data?.error?.type, data?.error?.message);
-      return res.status(502).json({ error: 'カルテの生成に失敗しました。' });
+      // 原因の切り分け用：エラー種別だけを返す（キーや内部情報は含めない）
+      const type = String(data?.error?.type || 'unknown').replace(/[^a-z_]/g, '');
+      const credit = /credit balance/i.test(String(data?.error?.message || '')) ? '・残高不足' : '';
+      return res.status(502).json({ error: `カルテの生成に失敗しました。（${response.status} ${type}${credit}）` });
     }
     const text = data.content?.[0]?.text;
     if (!text) return res.status(502).json({ error: 'カルテの生成に失敗しました。' });
